@@ -32,6 +32,39 @@ const COLLAPSED_KEY = "canopy.collapsed";
 const POSITION = "lhs";
 const SIZE = 0.3;
 
+const TOC_ENABLED_KEY = "canopy.toc.enabled";
+const TOC_POSITION = "rhs";
+const TOC_SIZE = 0.22;
+
+type TocEntry = { level: number; text: string };
+
+/** Extracts H1–H3 headings from markdown, skipping frontmatter and code fences. */
+function parseHeadings(md: string): TocEntry[] {
+  const lines = md.split("\n");
+  const out: TocEntry[] = [];
+  let inFence = false;
+  let inFrontmatter = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (i === 0 && line.trim() === "---") {
+      inFrontmatter = true;
+      continue;
+    }
+    if (inFrontmatter) {
+      if (line.trim() === "---") inFrontmatter = false;
+      continue;
+    }
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const m = /^(#{1,3})\s+(.*\S)\s*$/.exec(line);
+    if (m) out.push({ level: m[1].length, text: m[2].trim() });
+  }
+  return out;
+}
+
 // Pages we never want to show in the sidebar (system / meta stuff).
 const HIDE_REGEX = /^(Library($|\/)|CONFIG$|SETTINGS$|index$)/;
 
@@ -473,4 +506,104 @@ export async function renameItem(name: string) {
   await flushSync();
   await editor.navigate(newName);
   await show();
+}
+
+// ---------------------------------------------------------------------------
+// Table of contents / outline (right-hand panel)
+// ---------------------------------------------------------------------------
+
+async function isTocEnabled(): Promise<boolean> {
+  const v = await clientStore.get(TOC_ENABLED_KEY);
+  return v === undefined || v === null ? true : !!v;
+}
+
+const TOC_CSS = `
+  html, body { background: #0a0a0d !important; margin: 0; }
+  .toc-root, .toc-root * {
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif !important;
+  }
+  .toc-root {
+    color: var(--root-color, #c8d3f5); background: #0a0a0d;
+    height: 100%; display: flex; flex-direction: column; font-size: 13.5px;
+  }
+  .toc-header {
+    padding: 10px 12px; font-weight: 700; letter-spacing: .3px;
+    border-bottom: 1px solid var(--ui-surface-border-color, #2a2e3f);
+    display: flex; align-items: center; gap: 7px; color: var(--root-color,#e6ecff);
+  }
+  .toc-header .dot { color: var(--ui-accent-color,#7aa2f7); }
+  .toc-list { overflow-y: auto; padding: 8px 6px 20px; flex: 1; }
+  .toc-item {
+    padding: 5px 10px; border-radius: 6px; cursor: pointer;
+    color: var(--ui-surface-subtle-color,#9aa3b4); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; line-height: 1.35; border-left: 2px solid transparent;
+  }
+  .toc-item:hover { background: var(--subtle-background-color, rgba(255,255,255,.07)); color: var(--root-color,#fff); }
+  .toc-l1 { font-weight: 600; color: var(--root-color,#c8d3f5); padding-left: 10px; }
+  .toc-l2 { padding-left: 24px; }
+  .toc-l3 { padding-left: 38px; font-size: 12.5px; }
+  .toc-empty { padding: 16px 14px; color: var(--ui-surface-subtle-color,#8a93a6); font-size: 13px; }
+`;
+
+const TOC_JS = `
+(function(){
+  var root = document.querySelector('.toc-root');
+  if (!root) return;
+  root.addEventListener('click', function(e){
+    var it = e.target.closest('.toc-item');
+    if (it && it.dataset.ref) syscall('editor.navigate', it.dataset.ref, false, false);
+  });
+})();
+`;
+
+export async function showToc() {
+  const page = await editor.getCurrentPage();
+  let text = "";
+  try {
+    text = await editor.getText();
+  } catch {
+    try {
+      text = await space.readPage(page);
+    } catch {
+      text = "";
+    }
+  }
+  const headings = parseHeadings(text);
+  const body = headings.length
+    ? headings.map((h) =>
+      `<div class="toc-item toc-l${h.level}" data-ref="${esc(page + "#" + h.text)}" title="${esc(h.text)}">${esc(h.text)}</div>`
+    ).join("")
+    : `<div class="toc-empty">Sin encabezados en esta nota.</div>`;
+
+  const html = `
+    <link rel="stylesheet" href="/.client/main.css" />
+    <style>${TOC_CSS}</style>
+    <div class="toc-root">
+      <div class="toc-header"><span class="dot">☰</span> Contenido</div>
+      <div class="toc-list">${body}</div>
+    </div>`;
+
+  await editor.showPanel(TOC_POSITION, TOC_SIZE, html, TOC_JS);
+  await clientStore.set(TOC_ENABLED_KEY, true);
+}
+
+export async function hideToc() {
+  await editor.hidePanel(TOC_POSITION);
+  await clientStore.set(TOC_ENABLED_KEY, false);
+}
+
+export async function toggleToc() {
+  if (await isTocEnabled()) {
+    await hideToc();
+  } else {
+    await showToc();
+  }
+}
+
+export async function showTocIfEnabled() {
+  try {
+    if (await isTocEnabled()) await showToc();
+  } catch (err) {
+    console.error("Canopy showTocIfEnabled failed", err);
+  }
 }

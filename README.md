@@ -12,6 +12,8 @@ feels a lot more like Obsidian's file explorer.
 ## Features
 
 - 🗂️ **Folder tree** with collapsible folders (state is remembered per browser)
+- 🧭 **Outline / table of contents** on the right — auto-detects `H1`–`H3`
+  headings in the current note, indented by level; click to jump
 - 🎨 **Per-page icons** — set `icon: "🔥"` in a page's frontmatter
 - ⚫ **Clean dark UI** that blends into a near-black theme
 - ➕ **Create pages and folders** right inside the folder you're in
@@ -66,6 +68,7 @@ A folder takes its icon from the page that shares the folder's name (a
 | Command | Shortcut | What it does |
 |---|---|---|
 | `Canopy: Toggle Sidebar` | `Ctrl-Alt-s` | Show / hide the sidebar |
+| `Canopy: Toggle Outline` | — | Show / hide the outline panel |
 | `Canopy: New Page` | — | New page in the current folder |
 | `Canopy: New Folder` | — | New folder in the current folder |
 

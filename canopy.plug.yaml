@@ -31,3 +31,17 @@ functions:
     path: ./canopy.ts:renameItem
   newPageIn:
     path: ./canopy.ts:newPageIn
+  showToc:
+    path: ./canopy.ts:showToc
+  hideToc:
+    path: ./canopy.ts:hideToc
+  showTocIfEnabled:
+    path: ./canopy.ts:showTocIfEnabled
+    events:
+      - editor:init
+      - editor:pageLoaded
+      - editor:pageSaved
+  toggleToc:
+    path: ./canopy.ts:toggleToc
+    command:
+      name: "Canopy: Toggle Outline"
