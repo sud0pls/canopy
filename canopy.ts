@@ -14,19 +14,6 @@ async function flushSync() {
   }
 }
 
-// Nice default icons for common section names (used if no frontmatter icon).
-const FALLBACK_ICONS: Record<string, string> = {
-  "Red Team HQ": "\u{1F3AF}",
-  "Knowledge Base": "\u{1F4DA}",
-  "Certifications": "\u{1F3C5}",
-  "Labs & CTF": "\u{1F6A9}",
-  "Programming": "\u{1F4BB}",
-  "Toolbox": "\u{1F9F0}",
-  "Study Resources": "\u{1F4D6}",
-  "English": "\u{1F310}",
-  "Command Arsenal": "⌨️",
-};
-
 const ENABLED_KEY = "canopy.enabled";
 const COLLAPSED_KEY = "canopy.collapsed";
 const POSITION = "lhs";
@@ -71,7 +58,6 @@ const HIDE_REGEX = /^(Library($|\/)|CONFIG$|SETTINGS$|index$)/;
 type SvNode = {
   name: string; // full path
   title: string; // last segment
-  icon?: string; // emoji
   isPage: boolean; // true if an actual page exists at this path
   isCurrent: boolean;
   children: SvNode[];
@@ -80,9 +66,6 @@ type SvNode = {
 type PageMeta = {
   name: string;
   tags?: string[];
-  icon?: string;
-  // deco support
-  pageDecoration?: { icon?: string; prefix?: string };
   [key: string]: unknown;
 };
 
@@ -107,50 +90,15 @@ async function getCollapsed(): Promise<string[]> {
 // ---------------------------------------------------------------------------
 
 function iconFor(node: SvNode): string {
-  if (node.icon) return node.icon;
-  if (FALLBACK_ICONS[node.name]) return FALLBACK_ICONS[node.name];
+  // Folders (anything with children, or a non-page path node) get a folder
+  // icon; actual leaf pages get a note icon.
   if (!node.isPage || node.children.length > 0) return "\u{1F4C1}"; // 📁 folder
-  return "\u{1F4C4}"; // 📄 page
-}
-
-/** Strips surrounding quotes (straight or smart/curly) from an icon value. */
-function cleanIcon(v: string): string {
-  return v.replace(/^["'“”‘’]+/, "").replace(/["'“”‘’]+$/, "").trim();
-}
-
-/** Reads the `icon:` value from a page's frontmatter block, if present. */
-function parseFrontmatterIcon(md: string): string | undefined {
-  const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(md);
-  if (!m) return undefined;
-  const im = /^[ \t]*icon[ \t]*:[ \t]*(.+?)[ \t]*$/m.exec(m[1]);
-  if (!im) return undefined;
-  const v = cleanIcon(im[1]);
-  return v || undefined;
+  return "\u{1F4C4}"; // 📄 note
 }
 
 async function buildTree(): Promise<{ nodes: SvNode[]; currentPage: string }> {
   const currentPage = await editor.getCurrentPage();
   const pages = (await space.listPages()) as PageMeta[];
-
-  // Map from full page name -> icon (for folder-notes and pages)
-  const iconMap = new Map<string, string>();
-  for (const p of pages) {
-    const ic = p.icon ?? p.pageDecoration?.prefix ?? p.pageDecoration?.icon;
-    if (typeof ic === "string" && cleanIcon(ic)) {
-      iconMap.set(p.name, cleanIcon(ic));
-    }
-  }
-
-  // Real-time override: read the icon of the page being edited straight from
-  // the live editor text, so frontmatter changes show in the tree immediately
-  // (before the index catches up).
-  try {
-    const liveIcon = parseFrontmatterIcon(await editor.getText());
-    if (liveIcon) iconMap.set(currentPage, liveIcon);
-    else iconMap.delete(currentPage);
-  } catch {
-    // not in an editor context; ignore
-  }
 
   const root: SvNode = {
     name: "",
@@ -189,13 +137,6 @@ async function buildTree(): Promise<{ nodes: SvNode[]; currentPage: string }> {
       parent = node;
     });
   }
-
-  // Assign icons (now that structure is known)
-  const assign = (n: SvNode) => {
-    if (iconMap.has(n.name)) n.icon = iconMap.get(n.name);
-    n.children.forEach(assign);
-  };
-  root.children.forEach(assign);
 
   // Folders before pages, then alphabetical
   const sortNodes = (nodes: SvNode[]) => {

@@ -14,7 +14,7 @@ feels a lot more like Obsidian's file explorer.
 - 🗂️ **Folder tree** with collapsible folders (state is remembered per browser)
 - 🧭 **Outline / table of contents** on the right — auto-detects `H1`–`H3`
   headings in the current note, indented by level; click to jump
-- 🎨 **Per-page icons** — set `icon: "🔥"` in a page's frontmatter
+- 📁 **Folder / 📄 note icons** so the hierarchy reads at a glance
 - ⚫ **Clean dark UI** that blends into a near-black theme
 - ➕ **Create pages and folders** right inside the folder you're in
 - ✏️ **Rename** pages and whole folders (moves all sub-pages)
@@ -47,21 +47,6 @@ actionButton.define {
   run = function() editor.invokeCommand("Canopy: Toggle Sidebar") end
 }
 ```
-
-## Icons
-
-Any page can carry an icon shown in the tree via its frontmatter:
-
-```markdown
----
-icon: "🎯"
----
-
-# Red Team HQ
-```
-
-A folder takes its icon from the page that shares the folder's name (a
-"folder-note"). Folders and pages without an icon fall back to 📁 / 📄.
 
 ## Commands
 
