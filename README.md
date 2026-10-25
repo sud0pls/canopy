@@ -11,7 +11,8 @@ feels a lot more like Obsidian's file explorer.
 
 ## Features
 
-- 🗂️ **Folder tree** with collapsible folders (state is remembered per browser)
+- 🗂️ **Folder tree** — folders start collapsed; click a folder to expand or
+  collapse it (works recursively on subfolders; state is remembered per browser)
 - 🧭 **Outline / table of contents** on the right — auto-detects `H1`–`H3`
   headings in the current note, indented by level; click to jump
 - 📁 **Folder / 📄 note icons** so the hierarchy reads at a glance

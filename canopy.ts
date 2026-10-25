@@ -15,7 +15,8 @@ async function flushSync() {
 }
 
 const ENABLED_KEY = "canopy.enabled";
-const COLLAPSED_KEY = "canopy.collapsed";
+// Folders that the user has explicitly expanded. Everything else starts closed.
+const EXPANDED_KEY = "canopy.expanded";
 const POSITION = "lhs";
 const SIZE = 0.3;
 
@@ -81,8 +82,8 @@ async function isEnabled(): Promise<boolean> {
 async function setEnabled(v: boolean): Promise<void> {
   await clientStore.set(ENABLED_KEY, v);
 }
-async function getCollapsed(): Promise<string[]> {
-  return (await clientStore.get(COLLAPSED_KEY)) as string[] ?? [];
+async function getExpanded(): Promise<string[]> {
+  return (await clientStore.get(EXPANDED_KEY)) as string[] ?? [];
 }
 
 // ---------------------------------------------------------------------------
@@ -162,23 +163,25 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function renderNode(node: SvNode, depth: number, collapsed: Set<string>): string {
+function renderNode(node: SvNode, depth: number, expanded: Set<string>): string {
   const hasChildren = node.children.length > 0;
-  const isCollapsed = collapsed.has(node.name);
+  // Folders start closed; only those the user has expanded are open.
+  const isOpen = hasChildren && expanded.has(node.name);
   const icon = iconFor(node);
   const pad = 8 + depth * 14;
   const toggle = hasChildren
-    ? `<span class="sv-toggle" data-toggle="${esc(node.name)}">${isCollapsed ? "▸" : "▾"}</span>`
+    ? `<span class="sv-toggle" data-toggle="${esc(node.name)}">${isOpen ? "▾" : "▸"}</span>`
     : `<span class="sv-toggle sv-toggle-empty"></span>`;
-  const navAttr = node.isPage ? ` data-nav="${esc(node.name)}"` : "";
-  const cls = `sv-row${node.isCurrent ? " sv-current" : ""}${node.isPage ? "" : " sv-folder-only"}`;
+  // Clicking a folder (a node with children) toggles it; only leaf pages navigate.
+  const navAttr = node.isPage && !hasChildren ? ` data-nav="${esc(node.name)}"` : "";
+  const cls = `sv-row${node.isCurrent ? " sv-current" : ""}${hasChildren ? " sv-folder" : ""}`;
   const row =
     `<div class="${cls}" style="padding-left:${pad}px"${navAttr} data-path="${esc(node.name)}">` +
     `${toggle}<span class="sv-icon">${icon}</span><span class="sv-title">${esc(node.title)}</span></div>`;
   let childrenHtml = "";
   if (hasChildren) {
-    childrenHtml = `<div class="sv-children${isCollapsed ? " sv-collapsed" : ""}">` +
-      node.children.map((c) => renderNode(c, depth + 1, collapsed)).join("") +
+    childrenHtml = `<div class="sv-children${isOpen ? "" : " sv-collapsed"}">` +
+      node.children.map((c) => renderNode(c, depth + 1, expanded)).join("") +
       `</div>`;
   }
   return `<div class="sv-node">${row}${childrenHtml}</div>`;
@@ -250,20 +253,20 @@ function svInit() {
   if (!root) return;
   root.addEventListener('click', function(e) {
     svHideMenu();
-    var tg = e.target.closest('.sv-toggle');
-    if (tg && tg.dataset.toggle !== undefined) {
-      e.stopPropagation();
-      var node = tg.closest('.sv-node');
-      var kids = node && node.querySelector(':scope > .sv-children');
-      if (kids) {
-        var nowCollapsed = kids.classList.toggle('sv-collapsed');
-        tg.textContent = nowCollapsed ? '\\u25B8' : '\\u25BE';
-        svPersistCollapsed();
-      }
+    var row = e.target.closest('.sv-row');
+    if (!row) return;
+    var node = row.closest('.sv-node');
+    var kids = node && node.querySelector(':scope > .sv-children');
+    // Folder: clicking anywhere on the row opens/closes it.
+    if (kids) {
+      var nowCollapsed = kids.classList.toggle('sv-collapsed');
+      var tg = row.querySelector('.sv-toggle');
+      if (tg) tg.textContent = nowCollapsed ? '\\u25B8' : '\\u25BE';
+      svPersistExpanded();
       return;
     }
-    var row = e.target.closest('.sv-row');
-    if (row && row.dataset.nav !== undefined) {
+    // Leaf page: navigate.
+    if (row.dataset.nav !== undefined) {
       syscall('editor.navigate', row.dataset.nav, false, false);
     }
   });
@@ -305,14 +308,16 @@ function svInit() {
   var rf = document.getElementById('sv-refresh');
   if (rf) rf.addEventListener('click', function(){ syscall('system.invokeFunction', 'canopy.show'); });
 }
-function svPersistCollapsed() {
-  var collapsed = [];
-  document.querySelectorAll('.sv-children.sv-collapsed').forEach(function(ch){
-    var node = ch.closest('.sv-node');
-    var row = node && node.querySelector(':scope > .sv-row');
-    if (row && row.dataset.path) collapsed.push(row.dataset.path);
+function svPersistExpanded() {
+  var expanded = [];
+  document.querySelectorAll('.sv-node').forEach(function(node){
+    var kids = node.querySelector(':scope > .sv-children');
+    if (kids && !kids.classList.contains('sv-collapsed')) {
+      var row = node.querySelector(':scope > .sv-row');
+      if (row && row.dataset.path) expanded.push(row.dataset.path);
+    }
   });
-  syscall('clientStore.set', 'canopy.collapsed', collapsed);
+  syscall('clientStore.set', 'canopy.expanded', expanded);
 }
 svInit();
 `;
@@ -323,10 +328,10 @@ svInit();
 
 export async function show() {
   const { nodes } = await buildTree();
-  const collapsed = new Set(await getCollapsed());
+  const expanded = new Set(await getExpanded());
 
   const body = nodes.length
-    ? nodes.map((n) => renderNode(n, 0, collapsed)).join("")
+    ? nodes.map((n) => renderNode(n, 0, expanded)).join("")
     : `<div class="sv-empty">No hay páginas todavía.<br>Pulsa ＋ para crear una.</div>`;
 
   const html = `
