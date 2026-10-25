@@ -1,0 +1,33 @@
+name: canopy
+functions:
+  show:
+    path: ./canopy.ts:show
+  hide:
+    path: ./canopy.ts:hide
+  showIfEnabled:
+    path: ./canopy.ts:showIfEnabled
+    events:
+      - editor:init
+      - editor:pageLoaded
+      - editor:pageSaved
+      - file:deleted
+  toggle:
+    path: ./canopy.ts:toggle
+    command:
+      name: "Canopy: Toggle Sidebar"
+      key: "Ctrl-Alt-s"
+      mac: "Cmd-Alt-s"
+  newPage:
+    path: ./canopy.ts:newPage
+    command:
+      name: "Canopy: New Page"
+  newFolder:
+    path: ./canopy.ts:newFolder
+    command:
+      name: "Canopy: New Folder"
+  deleteItem:
+    path: ./canopy.ts:deleteItem
+  renameItem:
+    path: ./canopy.ts:renameItem
+  newPageIn:
+    path: ./canopy.ts:newPageIn
