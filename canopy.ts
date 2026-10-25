@@ -113,6 +113,21 @@ function iconFor(node: SvNode): string {
   return "\u{1F4C4}"; // 📄 page
 }
 
+/** Strips surrounding quotes (straight or smart/curly) from an icon value. */
+function cleanIcon(v: string): string {
+  return v.replace(/^["'“”‘’]+/, "").replace(/["'“”‘’]+$/, "").trim();
+}
+
+/** Reads the `icon:` value from a page's frontmatter block, if present. */
+function parseFrontmatterIcon(md: string): string | undefined {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(md);
+  if (!m) return undefined;
+  const im = /^[ \t]*icon[ \t]*:[ \t]*(.+?)[ \t]*$/m.exec(m[1]);
+  if (!im) return undefined;
+  const v = cleanIcon(im[1]);
+  return v || undefined;
+}
+
 async function buildTree(): Promise<{ nodes: SvNode[]; currentPage: string }> {
   const currentPage = await editor.getCurrentPage();
   const pages = (await space.listPages()) as PageMeta[];
@@ -121,7 +136,20 @@ async function buildTree(): Promise<{ nodes: SvNode[]; currentPage: string }> {
   const iconMap = new Map<string, string>();
   for (const p of pages) {
     const ic = p.icon ?? p.pageDecoration?.prefix ?? p.pageDecoration?.icon;
-    if (typeof ic === "string" && ic.trim()) iconMap.set(p.name, ic.trim());
+    if (typeof ic === "string" && cleanIcon(ic)) {
+      iconMap.set(p.name, cleanIcon(ic));
+    }
+  }
+
+  // Real-time override: read the icon of the page being edited straight from
+  // the live editor text, so frontmatter changes show in the tree immediately
+  // (before the index catches up).
+  try {
+    const liveIcon = parseFrontmatterIcon(await editor.getText());
+    if (liveIcon) iconMap.set(currentPage, liveIcon);
+    else iconMap.delete(currentPage);
+  } catch {
+    // not in an editor context; ignore
   }
 
   const root: SvNode = {
